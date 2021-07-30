@@ -4,11 +4,31 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
+#include <linux/kernel.h>
+#include <linux/kprobes.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
 
 enum RETURN_CODE { SUCCESS };
+
+static unsigned long lookup_name(const char *name)
+{
+	struct kprobe kp = {
+	    .symbol_name = name
+	};
+	unsigned long retval;
+
+	if (register_kprobe(&kp) < 0) return 0;
+	retval = (unsigned long) kp.addr;
+	unregister_kprobe(&kp);
+	return retval;
+}
+
+
+
+
+
 
 struct ftrace_hook {
     const char *name;
@@ -19,7 +39,9 @@ struct ftrace_hook {
 
 static int hook_resolve_addr(struct ftrace_hook *hook)
 {
-    hook->address = kallsyms_lookup_name(hook->name);
+    
+    hook->address = lookup_name(hook->name);
+    
     if (!hook->address) {
         printk("unresolved symbol: %s\n", hook->name);
         return -ENOENT;
@@ -41,6 +63,8 @@ static void notrace hook_ftrace_thunk(unsigned long ip,
 static int hook_install(struct ftrace_hook *hook)
 {
     int err = hook_resolve_addr(hook);
+    pr_info("Installing hook");
+    pr_info("err is %d",err);
     if (err)
         return err;
 
@@ -90,7 +114,9 @@ static struct ftrace_hook hook;
 static bool is_hidden_proc(pid_t pid)
 {
     pid_node_t *proc, *tmp_proc;
+    pr_info("is_hidden_proc is called!!");
     list_for_each_entry_safe(proc, tmp_proc, &hidden_proc, list_node) {
+    	pr_info("proc->id: %d",proc->id);
         if (proc->id == pid)
             return true;
     }
@@ -107,7 +133,8 @@ static struct pid *hook_find_ge_pid(int nr, struct pid_namespace *ns)
 
 static void init_hook(void)
 {
-    real_find_ge_pid = (find_ge_pid_func) kallsyms_lookup_name("find_ge_pid");
+    pr_info("hook initialization");
+    real_find_ge_pid = (find_ge_pid_func)lookup_name("find_ge_pid");
     hook.name = "find_ge_pid";
     hook.func = hook_find_ge_pid;
     hook.orig = &real_find_ge_pid;
@@ -173,6 +200,8 @@ static ssize_t device_write(struct file *filep,
     char *message;
 
     char add_message[] = "add", del_message[] = "del";
+    
+    
     if (len < sizeof(add_message) - 1 && len < sizeof(del_message) - 1)
         return -EAGAIN;
 
@@ -213,6 +242,11 @@ static int _hideproc_init(void)
 {
     int err, dev_major;
     dev_t dev;
+    
+ 
+	
+    
+    
     printk(KERN_INFO "@ %s\n", __func__);
     err = alloc_chrdev_region(&dev, 0, MINOR_VERSION, DEVICE_NAME);
     dev_major = MAJOR(dev);
@@ -225,12 +259,16 @@ static int _hideproc_init(void)
                   DEVICE_NAME);
 
     init_hook();
+    
+    
 
     return 0;
 }
 
 static void _hideproc_exit(void)
 {
+    
+    
     printk(KERN_INFO "@ %s\n", __func__);
     /* FIXME: ensure the release of all allocated resources */
 }
