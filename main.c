@@ -25,11 +25,6 @@ static unsigned long lookup_name(const char *name)
 	return retval;
 }
 
-
-
-
-
-
 struct ftrace_hook {
     const char *name;
     void *func, *orig;
@@ -38,8 +33,7 @@ struct ftrace_hook {
 };
 
 static int hook_resolve_addr(struct ftrace_hook *hook)
-{
-    
+{  
     hook->address = lookup_name(hook->name);
     
     if (!hook->address) {
@@ -242,11 +236,7 @@ static int _hideproc_init(void)
 {
     int err, dev_major;
     dev_t dev;
-    
- 
-	
-    
-    
+
     printk(KERN_INFO "@ %s\n", __func__);
     err = alloc_chrdev_region(&dev, 0, MINOR_VERSION, DEVICE_NAME);
     dev_major = MAJOR(dev);
@@ -257,18 +247,12 @@ static int _hideproc_init(void)
     cdev_add(&cdev, MKDEV(dev_major, MINOR_VERSION), 1);
     device_create(hideproc_class, NULL, MKDEV(dev_major, MINOR_VERSION), NULL,
                   DEVICE_NAME);
-
     init_hook();
-    
-    
-
     return 0;
 }
 
 static void _hideproc_exit(void)
 {
-    
-    
     printk(KERN_INFO "@ %s\n", __func__);
     /* FIXME: ensure the release of all allocated resources */
 }
