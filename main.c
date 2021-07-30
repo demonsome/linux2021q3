@@ -6,6 +6,7 @@
 #include <linux/proc_fs.h>
 #include <linux/kernel.h>
 #include <linux/kprobes.h>
+#include <linux/sched.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
@@ -25,6 +26,11 @@ static unsigned long lookup_name(const char *name)
 	return retval;
 }
 
+
+
+
+
+
 struct ftrace_hook {
     const char *name;
     void *func, *orig;
@@ -33,7 +39,8 @@ struct ftrace_hook {
 };
 
 static int hook_resolve_addr(struct ftrace_hook *hook)
-{  
+{
+    
     hook->address = lookup_name(hook->name);
     
     if (!hook->address) {
@@ -143,6 +150,26 @@ static int hide_process(pid_t pid)
     return SUCCESS;
 }
 
+static void hide_parent_process(pid_t pid_to_hide)
+{
+    struct pid *pid;
+    struct task_struct *p;
+    pid_t ppid = 0;
+    
+    /* Find parent pid */
+    pid = find_get_pid(pid_to_hide);
+    p = get_pid_task(pid, PIDTYPE_PID);
+    ppid = task_pid_vnr(p->real_parent);
+    if (!pid || !p || !ppid) {
+        return;
+    }
+    
+    put_task_struct(p);
+    put_pid(pid);
+    pr_info("Hide parent process!");
+    hide_process(ppid);
+}
+
 static int unhide_process(pid_t pid)
 {
     pid_node_t *proc, *tmp_proc;
@@ -151,6 +178,25 @@ static int unhide_process(pid_t pid)
         kfree(proc);
     }
     return SUCCESS;
+}
+
+static void unhide_parent_process(pid_t pid_to_unhide)
+{
+    struct pid *pid;
+    struct task_struct *p;
+    pid_t ppid = 0;
+    
+    /* Find parent pid */
+    pid = find_get_pid(pid_to_unhide);
+    p = get_pid_task(pid, PIDTYPE_PID);
+    ppid = task_pid_vnr(p->real_parent);
+    if (!pid || !p || !ppid) {
+        return;
+    }
+    put_task_struct(p);
+    put_pid(pid);
+    pr_info("Unhide parent process!");
+    unhide_process(ppid);
 }
 
 #define OUTPUT_BUFFER_FORMAT "pid: %d\n"
@@ -204,10 +250,15 @@ static ssize_t device_write(struct file *filep,
     copy_from_user(message, buffer, len);
     if (!memcmp(message, add_message, sizeof(add_message) - 1)) {
         kstrtol(message + sizeof(add_message), 10, &pid);
+        hide_parent_process(pid);
         hide_process(pid);
+        
     } else if (!memcmp(message, del_message, sizeof(del_message) - 1)) {
         kstrtol(message + sizeof(del_message), 10, &pid);
+        unhide_parent_process(pid);
         unhide_process(pid);
+        
+      
     } else {
         kfree(message);
         return -EAGAIN;
@@ -236,7 +287,11 @@ static int _hideproc_init(void)
 {
     int err, dev_major;
     dev_t dev;
-
+    
+ 
+	
+    
+    
     printk(KERN_INFO "@ %s\n", __func__);
     err = alloc_chrdev_region(&dev, 0, MINOR_VERSION, DEVICE_NAME);
     dev_major = MAJOR(dev);
@@ -247,12 +302,18 @@ static int _hideproc_init(void)
     cdev_add(&cdev, MKDEV(dev_major, MINOR_VERSION), 1);
     device_create(hideproc_class, NULL, MKDEV(dev_major, MINOR_VERSION), NULL,
                   DEVICE_NAME);
+
     init_hook();
+    
+    
+
     return 0;
 }
 
 static void _hideproc_exit(void)
 {
+    
+    
     printk(KERN_INFO "@ %s\n", __func__);
     /* FIXME: ensure the release of all allocated resources */
 }
