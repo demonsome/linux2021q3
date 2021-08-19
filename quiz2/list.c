@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
+#include "hash_table.h"
 
 #define HP_MAX_THREADS 128
 #define HP_MAX_HPS 5 /* This is named 'K' in the HP paper */
@@ -369,6 +370,8 @@ static void *delete_thread(void *arg)
 
 int main(void)
 {
+    hashtable_t *hashtable = ht_create(HP_MAX_THREADS);
+    
     list_t *list = list_new();
 
     pthread_t thr[N_THREADS];
